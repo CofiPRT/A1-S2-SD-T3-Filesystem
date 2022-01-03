@@ -1,0 +1,356 @@
+------- STRUCTURI DE DATE -------
+--- TEMA 3 - Linux Filesystem ---
+
+Cuprins:
+
+	0. Legenda..........................................Linia 22
+	1. Biblioteci si define-uri.........................Linia 31
+	2. Structuri........................................Linia 46
+	3. Modularizare
+		3.1. Fisierul "main_header.h"...................Linia 65
+		3.2. Fisierul "custom_functions.c"..............Linia 73
+		3.3. Fisierul "init_free_functions.c"...........Linia 82
+		3.4. Fisierul "secondary_functions.c"...........Linia 109
+		3.5. Fisierul "validation_functions.c"..........Linia 170
+		3.6. Fisierul "support_functions.c".............Linia 208
+		3.7. Fisierul "primary_functions.c".............Linia 264
+		3.8. Fisierul "source.c"........................Linia 333
+	4.. Alte detalii....................................Linia 351
+
+--- ---------- ---
+--- 0. Legenda ---
+--- ---------- ---
+	- In acest README, o referinta  "(Linia #)" se refera strict la
+	linia # a acestui fisier README, nu a altui fisier.
+
+--- --------------------------- ---
+--- 1. Biblioteci si define-uri ---
+--- --------------------------- ---
+
+Folosesc:
+	<stdio.h> pentru familiile de functii 'print' si 'scan'
+	<stdlib.h> pentru functiile 'malloc' si 'free'
+	<string.h> pentru manipularea sirurilor de caractere
+	<stdbool.h> pentru claritatea utilizarii variabilelor folosite drept biti
+	(true si false)
+
+	- MAXCHARS 100 - pentru un string cu rol de buffer in cadrul implementarii
+		(Linia 98) si alocarea oricarui alt string din program
+	- MAXFUNCTIONS 9 - numarul de functii principale (cele din enuntul temei)
+
+--- ------------ ---
+--- 2. Structuri ---
+--- ------------ ---
+
+node:
+	- structura ce serveste la implementarea arborelui
+	- data - salveaza caracterul caracteristic nodului
+	- next - pointer catre urmatorul nod de pe acelasi nivel cu acelasi parinte
+	- child - pointer catre primul copil al acestui nod
+
+function_map:
+	- structura ce usureaza "map-area" functiilor la stringurile
+	corespunzatoare (Linia 336)
+
+main_params:
+	- structura ce are unicul scop de a usura transmiterea parametrilor catre
+	functii, acestea fiind apelate cu o variabila de acest tip
+
+
+--- ----------------------------- ---
+--- 3.1. Fisierul "main_header.h" ---
+--- ----------------------------- ---
+
+Acest fisier contine structurile antepuse si prototipurile tuturor functiilor
+ce urmeaza a fi descrise
+
+
+--- ---------------------------------- ---
+--- 3.2. Fisierul "custom_functions.c" ---
+--- ---------------------------------- ---
+
+Acest fisier contine functii "custom" precum 'malloc_c', 'fopen_c', 'strncpy_c'
+si 'concat' ce sunt, in esenta, functiile cu numele aferent dar testate pentru
+succes.
+
+
+--- ------------------------------------- ---
+--- 3.3. Fisierul "init_free_functions.c" ---
+--- ------------------------------------- ---
+
+Contine functii ce initializeaza si/sau aloca diferite structuri, precum si
+functii ce elibereaza memoria acestora.
+
+Functia 'init_node'
+	- Aloca memorie pentru un nod din arbore, acesta fiind initial invalid
+	(isValid = false; implicit, nodul nu este o cale valida de fisier)
+
+Functia 'free_all_nodes'
+	- Elibereaza recursiv toate nodurile la care se poate ajunge de la nodul
+	primit ca parametru, trecandu-se prin cele de pe acelasi nivel cu acelasi
+	parinte (next) si prin toti copii sai (lor)
+	- Se elibereaza si nodul primit ca parametru
+
+Functia 'init_params'
+	- Pregateste codul pentru rulare, initializand nodul 'root', si pregatind
+	un 'buffer' folosit pentru citire din stdin
+
+Functia 'free_params'
+	- Apeleaza functia 'free_all_nodes' asupra lui 'root' pentru a elibera
+	absolut tot 'filesystem-ul'
+	- Se elibereaza tot ce a ramas alocat
+
+
+--- ------------------------------------- ---
+--- 3.4. Fisierul "secondary_functions.c" ---
+--- ------------------------------------- ---
+
+Functii ce ajuta enorm la modularizare, fiind folosite intr-un numar mare pe
+tot parcursul programului
+
+Functia 'add_separator'
+	- Garanteaza ca un 'string' se termina in caracterul '/'
+
+Functia 'print_string'
+	- Folosita in 'list_support' (Linia 214)
+	- Pe baza argumentului 'classify', se decide cum se va printa un anumit
+	element (director sau fisier)
+
+Functia 'previous_dir'
+	- Folosita in 'string_to_path' (Linia 132)
+	- Pentru fiecare pereche '..' se urca un director mai sus (de path-ul
+	curent, anume 'pwd_string') inspre 'root', prin variabila 'path' care se
+	modifica in acest fel
+	- Se verifica daca se cere un director mai 'sus' de root, absurditate ce
+	este tratata aferent
+	- Se concateneaza restul path-ului daca este cazul (dupa perechile '..')
+
+Functia 'string_to_path'
+	- Transforma un path oarecare intr-unul absolut, tratand toate cazurile
+
+Functia 'find_node'
+	- Functie foarte importanta, gaseste, pornind de la root, pe baza unui
+	string primit ca parametru, un nod in tot sistemul de fisiere
+	- Variabila 'descend' decide daca in cazul unui director, nodul returnat
+	va fi nodul '/' aferent lui
+	- Se returneaza nodul gasit sau NULL
+
+Functia 'split_path'
+	- Desparte un path intr-un director si intr-un fisier, despartite de
+	caracterul '/'
+	- Se returneaza nodul aferent directorului si se salveaza in 'file_name'
+	numele fisierului
+
+Functia 'add_to_trie'
+	- Adauga, nod cu nod (caracter cu caracter), un anumit string in arbore,
+	pornind de la nodul primit ca parametru 'work_node'
+	- Se verifica existenta fiecarui caracter
+	- In cazul in care trebuie adaugat, se adauga ordonat printre copiii unui
+	nod, conform ASCII
+	- In cazul in care se creeaza un fisier, ultimul nod devine o cale valida
+	prin 'isValid' setat drept 'true'
+
+Functia 'find_deletion_node'
+	- Cauta nodul ce are un copil ce nu face parte din alte nume (de directoare
+	sau fisiere)
+	- Se returneaza nodul aferent si se salveazapozitia string-ului (path-ului)
+	unde se poate gasi (prin 'cursor')
+
+Functia 'remove_child_link'
+	- Impreuna cu 'find_deletion_node', sterge legatura dintre nodul si copilul
+	descris mai sus, copilul fiind reprezentat de un caracter primit ca
+	parametru
+
+
+--- -------------------------------------- ---
+--- 3.5. Fisierul "validation_functions.c" ---
+--- -------------------------------------- ---
+
+Functii ce valideaza parametrii primiti, generand mesaje aferente
+
+Functia 'list_validation'
+	- Folosita de 'list' (Linia 274)
+	- Se verifica existenta argumentului -F, setandu-se variabila 'classify'
+	corespunzator
+	- Se verifica existenta unui path
+	- Pe baza path-ului, se gaseste nodul cu care sa se lucreze
+	- Implicit, nodul este cel curent (pwd)
+	- Daca nodul nu este gasit de path, se va afisa mesajul aferent in functia
+	'list'
+
+Functia 'change_dir_validation'
+	- Folosita de 'change_dir' (Linia 280)
+	- Se verifica numarul de argumente primite, afisandu-se mesajele aferente
+
+Functia 'create_file_validation'
+	- Folosita de 'create_file_support' (Linia 230)
+	- Se transforma path-ul primit ca argument intr-unul absolut
+	- Se verifica daca nodul (de preferat gasit) exista deja drept director
+	sau fisier, caz in care nu trebuie sa se adauge nimic
+	- Se verifica daca de fapt calea directorului chiar exista
+
+Functia 'remove_path_validation'
+	- Folosita de 'remove_path_support' (Linia 240)
+	- Se transforma path-ul primit ca argument intr-unul absolut
+	- Se verifica daca se doreste stergerea nodului 'root' (absurditate)
+	- Se verifica cerintele necesare unui director si ale unui fisier,
+	afisandu-se mesajele de eroare aferente
+
+Daca orice functie de mai sus a verificat cu succes fara nicio eroare, se
+returneaza 'true'.
+
+
+--- ----------------------------------- ---
+--- 3.6. Fisierul "support_functions.c" ---
+--- ----------------------------------- ---
+
+Functii ce continua implementarea functiilor principale din
+'primary_functions.c' (Linia 264)
+
+Functia 'list_support'
+	- Folosita de 'list' (Linia 274)
+	- Functia formeaza, recursiv, string-uri ce reprezinta fisiere sau
+	directoare
+	- Pornind de la un nod, se parcurg mai intai copii lui, apoi, pentru
+	fiecare nod din numele format de acesti copii, se parcurg copiii nodurilor
+	alaturate lor, pana la sfarsit (fisier) sau pana se intalneste un nod '/'
+	(director)
+
+Functia 'change_dir_support'
+	- Folosita de 'change_dir' (Linia 280)
+	- Se transforma path-ul primit ca parametru intr-unul absolut
+	- Se cauta nodul pe baza path-ului, verificandu-se existenta acestuia si
+	daca este un director
+	- In caz afirmativ, se schimba path-ul curent al sistemului (pwd_string)
+
+Functia 'create_file_support'
+	- Folosita de 'make_dir' (Linia 290) si 'create_file' (Linia 295)
+	- Se apeleaza 'create_file_validation' (Linia 189), continuitatea functiei
+	suport depinzand de rezultatul ei
+	- Se formeaza string-ul ce reprezinta numele ce trebuie adaugat la nodul
+	cu care se lucreaza
+	- Daca se creeaza un director (isDir = true, din mkdir), se concateneaza
+	la acest nume caracterul '/'
+	- Se apeleaza 'add_to_trie' (Linia 148) cu acest string
+
+Functia 'remove_path_support'
+	- Folosita de 'remove_empty_dir' (Linia 300) si 'remove_path' (Linia 306)
+	- Se apeleaza 'remove_path_validation' (Linia 196), continuitatea functiei
+	suport depinzand de rezultatul ei
+	- Se gaseste un nod ce are un copil ce nu face parte din nume de directoare
+	sau fisiere ce nu trebuie sterse, prin functia 'find_deletion_node'
+	(Linia 157)
+	- Se sterge legatura dintre acestia si se elibereaza nodurile ce pornesc
+	de la copil, prin apelarea functiei 'free_all_nodes' asupra acestuia
+
+Functia 'move_copy_support'
+	- Folosita de 'move' (Linia 317) si 'copy' (Linia 322)
+	- Se transforma string-urile sursa si destinatie in path-uri absolute
+	- Se verifica validitatea acestora, afisandu-se mesajele de eroare
+	aferente
+	- Daca este apelata de 'move' (marcat de variabila 'isMove') se sterge,
+	similar functiei 'remove_path_support', nodul de care nu este nevoie
+	- In orice caz, se creeaza in destinatie numele fisierului mutat sau
+	copiat; se desparte path-ul destinatie intr-un director si intr-un nume
+	(file_name), perfecte pentru a fi folosite de functia 'add_to_trie'
+	(Linia 148)
+
+
+--- ----------------------------------- ---
+--- 3.7. Fisierul "primary_functions.c" ---
+--- ----------------------------------- ---
+
+Fisierul contine functiile principale ale implementarii programului, anume
+cele din enunt
+
+Functia 'print_dir'
+	- pwd
+	- Afiseaza, simplu, string-ul ce reprezinta path-ul curent
+
+Functia 'list'
+	- ls
+	- Apeleaza 'list_validation' (Linia 175) pentru a se decide apelarea
+	functiei 'list_support' (Linia 214) asupra nodului ce reprezinta path-ul
+	cautat
+
+Functia 'change_dir'
+	- cd
+	- Apeleaza 'change_dir_validation' (Linia 185) pentru a se decide
+	apelarea functiei 'change_dir_support' (Linia 223) asupra path-ului cautat
+
+Urmatoarele functii din acest fisier se folosesc de strtok pentru a apela
+functiile suport aferente lor asupra fiecarui argument al comenzii
+
+Totodata se verifica daca numarul minim de argumente este valid
+
+Functia 'make_dir'
+	- mkdir
+	- Se apeleaza functia 'create_file_support' (Linia 230) asupra fiecarui
+	argument, cu variabila isDir = true pentru a desemna crearea unui director
+
+Functia 'create_file'
+	- touch
+	- Se apeleaza functia 'create_file_support' (Linia 230) asupra fiecarui
+	argument, cu variabila isDir = false pentru a desemna crearea unui fisier
+
+Functia 'remove_empty_dir'
+	- rmdir
+	- Se apeleaza functia 'remove_path_support' (Linia 240) asupra fiecarui
+	argument, cu variabila isDir = true pentru a desemna stergerea unui
+	director
+
+Functia 'remove_path'
+	- rm
+	- Se apeleaza functia 'remove_path_support' (Linia 240) asupra fiecarui
+	argument, cu variabila isDir = false pentru a desemna o stergere generala
+
+Urmatoarele doua functii extrag, inainte de strtok, ultimul argument al
+comenzii, reprezentand destinatia ce va fi uzitata in implementarea lor
+
+In cazul in care un singur argument este prezent, se afiseaza mesajul de eroare
+aferent
+
+Functia 'move'
+	- mv
+	- Se apeleaza functia 'move_copy_support' (Linia 250) asupra fiecarui
+	argument, cu variabila isMove = true pentru a desemna mutarea unui fisier
+
+Functia 'copy'
+	- cp
+	- Se apeleaza functia 'move_copy_support' (Linia 250) asupra fiecarui
+	argument, cu variabila isMove = false pentru a desemna copierea unui fisier
+
+Functia 'function_not_found'
+	- Aceasta functie exista pentru a fi folosita de 'find_function'
+	(Linia 336)
+
+
+--- ------------------------ ---
+--- 3.8. Fisierul "source.c" ---
+--- ------------------------ ---
+
+Functia 'find_function'
+	- Mapeaza functiile la string-urile aferente lor
+	- Din buffer-ul primit din main se extrage numele comenzii
+	- Se compara numele comenzii cu toate string-urile din map
+	- Cand se gaseste una, se apeleaza functia corespunzatoare string-ului.
+	- Intrucat functia returneaza un pointer catre o alta functie, e nevoie
+	de o functie care nu face nimic (catre care sa se pointeze) in cazul in
+	care nicio functie nu a fost gasita
+
+Functia 'main'
+	- Se apeleaza 'init_params' pentru a pregati codul pentru rulare,
+	se extrage cate o linie din fisierul de input (introducandu-se in buffer),
+	dupa care se elibereaza tot ce a fost initializat de 'init_params'.
+
+--- --------------- ---
+--- 4. Alte detalli ---
+--- --------------- ---
+
+Am ales sa salvez majoritatea elementelor necesare rularii intr-o singura
+variabila 'params' pentru a usura transmiterea lor catre functii (in
+majoritatea functiilor, se transmite doar 'params').
+
+Am realizat tarziu ca pot implementa arborele drept noduri in care pot memora
+si parintele fiecaruia, dar am reusit sa implementez enuntul fara acesta. Tin
+doar sa mentionez ca sunt constient de acest fapt.
